@@ -1,0 +1,700 @@
+# Natural Language Processing Practical No. 1
+
+import nltk
+from nltk.tokenize import (
+    WhitespaceTokenizer, WordPunctTokenizer,
+    TreebankWordTokenizer, TweetTokenizer, MWETokenizer
+)
+from nltk.stem import PorterStemmer, SnowballStemmer, WordNetLemmatizer
+
+nltk.download('punkt')
+nltk.download('wordnet')
+nltk.download('omw-1.4')
+
+text = "The programmers are coding @AI_Lab! They're looking forward to the 2026 era. #Python"
+
+words_to_stem = [
+    "program", "programs", "programmer",
+    "programming", "programmed", "feet", "was"
+]
+
+# 1. TOKENIZATION SUITE
+print("--- TOKENIZATION ---")
+print(f"Original: {text}\n")
+
+print(f"Whitespace: {WhitespaceTokenizer().tokenize(text)}")
+print(f"WordPunct: {WordPunctTokenizer().tokenize(text)}")
+print(f"Treebank: {TreebankWordTokenizer().tokenize(text)}")
+print(f"Tweet: {TweetTokenizer().tokenize(text)}")
+
+mwe = MWETokenizer([('looking', 'forward')])
+base_tokens = TreebankWordTokenizer().tokenize(text)
+
+print(f"MWE (looking_f): {mwe.tokenize(base_tokens)}")
+print("\n" + "-" * 30 + "\n")
+
+# 2. STEMMING & LEMMATIZATION
+print("--- STEMMING & LEMMATIZATION ---")
+
+ps = PorterStemmer()
+ss = SnowballStemmer("english")
+wnl = WordNetLemmatizer()
+
+header = f"{'Word':<12} | {'Porter':<12} | {'Snowball':<12} | {'Lemmatizer':<12}"
+
+print(header)
+print("-" * len(header))
+
+for word in words_to_stem:
+    p_stem = ps.stem(word)
+    s_stem = ss.stem(word)
+
+    # Using pos='v' for lemmatization to see 'was' -> 'be'
+    lemma = wnl.lemmatize(word, pos='v') if word == "was" else wnl.lemmatize(word)
+
+    print(f"{word:<12} | {p_stem:<12} | {s_stem:<12} | {lemma:<12}")
+
+
+
+
+
+
+
+# Natural Language Processing Practical No. 2
+
+import pandas as pd
+import nltk
+
+from sklearn.feature_extraction.text import (
+    CountVectorizer,
+    TfidfVectorizer
+)
+
+from gensim.models import Word2Vec
+from nltk.tokenize import word_tokenize
+
+# Setup
+nltk.download('punkt')
+
+# 1. Sample Data (Corpus)
+corpus = [
+    "The cat sat on the mat",
+    "The dog sat on the log",
+    "Cats and dogs are great pets",
+    "I love my pet dog and cat"
+]
+
+print("--- 1. BAG OF WORDS (Count Occurrence) ---")
+
+# CountVectorizer handles tokenization and counting
+bow_vectorizer = CountVectorizer()
+bow_matrix = bow_vectorizer.fit_transform(corpus)
+
+df_bow = pd.DataFrame(
+    bow_matrix.toarray(),
+    columns=bow_vectorizer.get_feature_names_out()
+)
+
+print(df_bow)
+
+print("\n--- 2. NORMALIZED COUNT OCCURRENCE ---")
+
+# We use TfidfVectorizer but disable the 'IDF' part to get L2 normalized counts
+norm_vectorizer = TfidfVectorizer(use_idf=False, norm='l2')
+norm_matrix = norm_vectorizer.fit_transform(corpus)
+
+df_norm = pd.DataFrame(
+    norm_matrix.toarray(),
+    columns=norm_vectorizer.get_feature_names_out()
+)
+
+print(df_norm.head(2))  # Showing first 2 rows for brevity
+
+print("\n--- 3. TF-IDF (Term Frequency-Inverse Document Frequency) ---")
+
+# Penalizes common words like 'the' and boosts unique words like 'mat' or 'log'
+tfidf_vectorizer = TfidfVectorizer()
+tfidf_matrix = tfidf_vectorizer.fit_transform(corpus)
+
+df_tfidf = pd.DataFrame(
+    tfidf_matrix.toarray(),
+    columns=tfidf_vectorizer.get_feature_names_out()
+)
+
+print(df_tfidf)
+
+print("\n--- 4. WORD2VEC EMBEDDINGS ---")
+
+# Tokenize the corpus for Gensim
+tokenized_data = [
+    word_tokenize(sentence.lower())
+    for sentence in corpus
+]
+
+# Train a basic Word2Vec model
+# vector_size=10: Each word is represented by 10 numbers
+# window=2: Look at 2 words to the left and right
+
+model = Word2Vec(
+    sentences=tokenized_data,
+    vector_size=10,
+    window=2,
+    min_count=1,
+    workers=4
+)
+
+# Look up a vector for a specific word
+word = "dog"
+
+if word in model.wv:
+    print(f"Vector for '{word}' (first 5 dims):", model.wv[word][:5])
+
+# Find similarity between words
+sim = model.wv.similarity('dog', 'cat')
+
+print(f"Cosine Similarity between 'dog' and 'cat': {sim:.4f}")
+
+
+
+
+
+
+
+
+
+
+# Natural Language Processing Practical No. 3
+
+import pandas as pd
+import nltk
+import re
+
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+
+from sklearn.preprocessing import LabelEncoder
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+# 1. Setup & Downloads
+nltk.download('stopwords')
+nltk.download('wordnet')
+nltk.download('omw-1.4')
+
+# Sample Data
+data = {
+    'text': [
+        "The programmers are coding @AI_Lab! They love Python.",
+        "Eating healthy food and fruits is great for your body.",
+        "Machine learning models require clean data and coding.",
+        "Fresh apples and oranges are very healthy fruits."
+    ],
+    'category': ['Tech', 'Health', 'Tech', 'Health']
+}
+
+df = pd.DataFrame(data)
+
+# 2. Text Cleaning, Stopword Removal, and Lemmatization
+stop_words = set(stopwords.words('english'))
+lemmatizer = WordNetLemmatizer()
+
+def clean_text(text):
+    # Remove punctuation and special characters (Regex)
+    text = re.sub(r'[^\w\s]', '', text).lower()
+
+    # Tokenize and remove stopwords + Lemmatize
+    tokens = text.split()
+
+    cleaned_tokens = [
+        lemmatizer.lemmatize(w)
+        for w in tokens
+        if w not in stop_words
+    ]
+
+    return " ".join(cleaned_tokens)
+
+df['cleaned_text'] = df['text'].apply(clean_text)
+
+# 3. Label Encoding
+label_encoder = LabelEncoder()
+
+df['category_encoded'] = label_encoder.fit_transform(df['category'])
+
+# 4. TF-IDF Representation
+tfidf_vec = TfidfVectorizer()
+
+tfidf_matrix = tfidf_vec.fit_transform(df['cleaned_text'])
+
+# Convert TF-IDF matrix to a readable DataFrame
+df_tfidf = pd.DataFrame(
+    tfidf_matrix.toarray(),
+    columns=tfidf_vec.get_feature_names_out()
+)
+
+# 5. Save Outputs
+df.to_csv('processed_data.csv', index=False)
+df_tfidf.to_csv('tfidf_features.csv', index=False)
+
+print("--- Original & Cleaned Data ---")
+print(df[['text', 'cleaned_text', 'category_encoded']])
+
+print("\n--- TF-IDF Feature Matrix (Saved to tfidf_features.csv) ---")
+print(df_tfidf.head())
+
+print("\nSuccess: Files 'processed_data.csv' and 'tfidf_features.csv' have been saved.")
+
+
+
+
+
+
+
+
+
+
+
+# Natural Language Processing Practical No. 4
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import math
+
+
+class MultiHeadAttention(nn.Module):
+
+    def __init__(self, d_model, num_heads):
+        super(MultiHeadAttention, self).__init__()
+
+        assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
+
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads
+
+        # Linear layers for Query, Key, and Value
+        self.W_q = nn.Linear(d_model, d_model)
+        self.W_k = nn.Linear(d_model, d_model)
+        self.W_v = nn.Linear(d_model, d_model)
+        self.W_o = nn.Linear(d_model, d_model)
+
+    def forward(self, q, k, v, mask=None):
+        batch_size = q.size(0)
+
+        q = self.W_q(q).view(
+            batch_size, -1, self.num_heads, self.d_k
+        ).transpose(1, 2)
+
+        k = self.W_k(k).view(
+            batch_size, -1, self.num_heads, self.d_k
+        ).transpose(1, 2)
+
+        v = self.W_v(v).view(
+            batch_size, -1, self.num_heads, self.d_k
+        ).transpose(1, 2)
+
+        scores = torch.matmul(
+            q, k.transpose(-2, -1)
+        ) / math.sqrt(self.d_k)
+
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, -1e9)
+
+        attn = F.softmax(scores, dim=-1)
+
+        context = torch.matmul(attn, v)
+
+        # 3. Concatenate heads and apply final linear layer
+        context = context.transpose(
+            1, 2
+        ).contiguous().view(batch_size, -1, self.d_model)
+
+        return self.W_o(context)
+
+
+class PositionWiseFeedForward(nn.Module):
+
+    def __init__(self, d_model, d_ff):
+        super(PositionWiseFeedForward, self).__init__()
+
+        self.fc1 = nn.Linear(d_model, d_ff)
+        self.fc2 = nn.Linear(d_ff, d_model)
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        return self.fc2(self.relu(self.fc1(x)))
+
+
+class EncoderLayer(nn.Module):
+
+    def __init__(self, d_model, num_heads, d_ff, dropout):
+        super(EncoderLayer, self).__init__()
+
+        self.self_attn = MultiHeadAttention(d_model, num_heads)
+        self.feed_forward = PositionWiseFeedForward(d_model, d_ff)
+
+        self.norm1 = nn.LayerNorm(d_model)
+        self.norm2 = nn.LayerNorm(d_model)
+
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x, mask=None):
+
+        # Attention Sub-layer
+        attn_output = self.self_attn(x, x, x, mask)
+
+        x = self.norm1(x + self.dropout(attn_output))
+
+        # Feed-Forward Sub-layer
+        ff_output = self.feed_forward(x)
+
+        x = self.norm2(x + self.dropout(ff_output))
+
+        return x
+
+
+# Parameters: Batch Size=2, Seq Length=5, Model Dim=512
+d_model = 512
+num_heads = 8
+d_ff = 2048
+dropout = 0.1
+
+example_input = torch.randn(2, 5, d_model)
+
+encoder_layer = EncoderLayer(
+    d_model,
+    num_heads,
+    d_ff,
+    dropout
+)
+
+output = encoder_layer(example_input)
+
+print(f"Input Shape: {example_input.shape}")
+print(f"Output Shape: {output.shape}")
+
+
+
+
+
+
+
+
+
+
+
+
+# Natural Language Processing Practical No. 5
+
+import pandas as pd
+
+# Format: { 'Suffix_Found': ('Delete_Length', 'Add_String') }
+rules = {
+    'ies': (3, 'y'),      # e.g., Cities -> Cit + y = City
+    'ing': (3, ''),      # e.g., Playing -> Play + '' = Play (Simple)
+    'ning': (4, 'n'),    # e.g., Running -> Runn - ning + n = Run (Doubling)
+    'ed': (2, ''),       # e.g., Walked -> Walk + '' = Walk
+    'iness': (5, 'y'),   # e.g., Happiness -> Happ + y = Happy
+}
+
+def manual_stemmer(word):
+
+    word = word.lower()
+
+    for suffix, (delete_len, add_str) in rules.items():
+
+        if word.endswith(suffix):
+
+            # 1. Delete the suffix
+            root = word[:-delete_len]
+
+            # 2. Add the replacement string
+            stem = root + add_str
+
+            return stem, suffix, f"-{suffix}", f"+{add_str}"
+
+    return word, "None", "0", "0"
+
+
+# Testing the Logic
+test_words = [
+    "Cities",
+    "Running",
+    "Happiness",
+    "Played",
+    "Walking"
+]
+
+results = []
+
+for w in test_words:
+
+    stem, rule_name, deleted, added = manual_stemmer(w)
+
+    results.append([
+        w,
+        rule_name,
+        deleted,
+        added,
+        stem
+    ])
+
+
+# Displaying as a Table for your Practical
+df_morph = pd.DataFrame(
+    results,
+    columns=[
+        "Original Word",
+        "Suffix Rule",
+        "Delete",
+        "Add",
+        "Resulting Stem"
+    ]
+)
+
+print("--- Morphological Add-Delete Practical ---")
+print(df_morph.to_string(index=False))
+
+
+
+
+
+
+
+
+
+
+
+# Natural Language Processing Mini-Project
+
+# =========================
+# train.py
+# =========================
+
+import numpy as np
+import evaluate
+
+from datasets import load_dataset
+
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
+    TrainingArguments,
+    Trainer,
+    DataCollatorWithPadding
+)
+
+# 1. Load the IMDb dataset (Sentiment Analysis: Positive vs Negative)
+dataset = load_dataset("imdb")
+
+# 2. Load the pre-trained DistilBERT tokenizer
+checkpoint = "distilbert-base-uncased"
+
+tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+
+# 3. Preprocessing function to tokenize text
+def tokenize_function(examples):
+
+    return tokenizer(
+        examples["text"],
+        truncation=True
+    )
+
+# Apply tokenization to the dataset
+# We select a small subset (1,000 samples) to ensure it runs quickly
+tokenized_datasets = dataset.map(
+    tokenize_function,
+    batched=True
+)
+
+train_dataset = tokenized_datasets["train"] \
+    .shuffle(seed=42) \
+    .select(range(1000))
+
+test_dataset = tokenized_datasets["test"] \
+    .shuffle(seed=42) \
+    .select(range(500))
+
+# 4. Define evaluation metric (Accuracy)
+metric = evaluate.load("accuracy")
+
+def compute_metrics(eval_pred):
+
+    logits, labels = eval_pred
+
+    predictions = np.argmax(
+        logits,
+        axis=-1
+    )
+
+    return metric.compute(
+        predictions=predictions,
+        references=labels
+    )
+
+# 5. Load the model with a classification head (2 labels: Pos/Neg)
+model = AutoModelForSequenceClassification.from_pretrained(
+    checkpoint,
+    num_labels=2
+)
+
+# 6. Set up Training Arguments
+training_args = TrainingArguments(
+    output_dir="test_trainer",
+    eval_strategy="epoch",
+    learning_rate=2e-5,
+    per_device_train_batch_size=16,
+    per_device_eval_batch_size=16,
+    num_train_epochs=3,
+    weight_decay=0.01,
+    logging_steps=10,
+)
+
+# 7. Initialize the Trainer
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=train_dataset,
+    eval_dataset=test_dataset,
+    processing_class=tokenizer,
+    data_collator=DataCollatorWithPadding(
+        tokenizer=tokenizer
+    ),
+    compute_metrics=compute_metrics,
+)
+
+# 8. Start Fine-tuning
+print("Starting training...")
+
+trainer.train()
+
+# 9. Save the fine-tuned model
+trainer.save_model("./my_fine_tuned_model")
+
+print(
+    "Training complete. Model saved to ./my_fine_tuned_model"
+)
+
+# 10. Inference Test
+from transformers import pipeline
+
+classifier = pipeline(
+    "sentiment-analysis",
+    model="./my_fine_tuned_model"
+)
+
+print(
+    classifier(
+        "This was an absolutely brilliant cinematic masterpiece!"
+    )
+)
+
+print(
+    classifier(
+        "This was an absolutely horrible cinematic experience!"
+    )
+)
+
+
+# =========================
+# test.py
+# =========================
+
+import gradio as gr
+
+from transformers import pipeline
+
+# 1. Load the model
+try:
+
+    model_path = "./my_fine_tuned_model"
+
+    # top_k=None tells the model to give us probabilities for BOTH labels
+    classifier = pipeline(
+        "text-classification",
+        model=model_path,
+        top_k=None
+    )
+
+except Exception as e:
+
+    print(f"Error loading model: {e}")
+
+# 2. Refined Prediction Logic
+def analyze_review(text):
+
+    if not text or len(text.strip()) == 0:
+        return {
+            "Please enter text": 0.0
+        }
+
+    # Get predictions
+    results = classifier(text)
+
+    formatted_results = {}
+
+    for item in results[0]:
+
+        # Access the first element of the list
+        label_name = (
+            "Positive"
+            if item['label'] == 'LABEL_1'
+            else "Negative"
+        )
+
+        formatted_results[label_name] = item['score']
+
+    return formatted_results
+
+# 3. Enhanced UI Layout
+with gr.Blocks(
+    theme=gr.themes.Soft(
+        primary_hue="indigo"
+    )
+) as demo:
+
+    gr.Markdown(
+        "# Modern Movie Sentiment AI"
+    )
+
+    gr.Markdown(
+        "### *Transformer-Based Sequence Classification (DistilBERT)*"
+    )
+
+    with gr.Row():
+
+        with gr.Column():
+
+            input_msg = gr.Textbox(
+                label="Review Text",
+                placeholder="How was the movie?",
+                lines=4
+            )
+
+            submit_btn = gr.Button(
+                "Run Analysis",
+                variant="primary"
+            )
+
+        with gr.Column():
+
+            output_plot = gr.Label(
+                label="Result",
+                num_top_classes=2
+            )
+
+    submit_btn.click(
+        fn=analyze_review,
+        inputs=input_msg,
+        outputs=output_plot
+    )
+
+    gr.Examples(
+        examples=[
+            "This was the best movie I've seen all year!",
+            "What a total disaster and waste of money."
+        ],
+        inputs=input_msg
+    )
+
+if __name__ == "__main__":
+    demo.launch()
